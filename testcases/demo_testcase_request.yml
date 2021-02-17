@@ -1,6 +1,8 @@
 
 config:
     name: "request methods testcase with functions"
+    parameters:
+        index: [1, 2]
     variables:
         foo1: config_bar1
         foo2: config_bar2

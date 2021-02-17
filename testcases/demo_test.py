@@ -3,13 +3,26 @@
 
 
 from httprunner import HttpRunner, Config, Step, RunRequest, RunTestCase
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+from httprunner import HttpRunner, Config, Step, RunRequest, RunTestCase
+
+from testcases.login_test import (
+    TestCaseLogin as CaseLogin,
+)
 
 class TestCaseDemo(HttpRunner):
 
-    config = Config("testcase description").verify(False)
+    config = Config("testcase description").variables(**{"memberId":"${memberId}"}).verify(False)
 
     teststeps = [
+        Step(
+            RunTestCase("login").call(CaseLogin)
+        ),
         Step(
             RunRequest("/login/password")
             .get("https://mubu.com/login/password")
@@ -19,7 +32,7 @@ class TestCaseDemo(HttpRunner):
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
                     "upgrade-insecure-requests": "1",
-                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
+                    "user-agent": "HttpRunner/${get_httprunner_version()}",
                     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
                     "sec-fetch-site": "same-origin",
                     "sec-fetch-mode": "navigate",
@@ -48,6 +61,7 @@ class TestCaseDemo(HttpRunner):
                     "Hm_lpvt_4426cbb0486a79ea049b4ad52d81b504": "1613450257",
                 }
             )
+            .teardown_hook("${get_folders_num($response)}","folder_num")
             .validate()
             .assert_equal("status_code", 200)
         ),
@@ -93,6 +107,10 @@ class TestCaseDemo(HttpRunner):
         ),
         Step(
             RunRequest("/api/login/submit")
+            .with_variables(**{
+                "remember":"true",
+                "timestamp":"${get_timestamp()}"
+            })
             .post("https://mubu.com/api/login/submit")
             .with_headers(
                 **{
@@ -130,7 +148,11 @@ class TestCaseDemo(HttpRunner):
                 }
             )
             .with_data(
-                {"phone": "13543303810", "password": "928sr410", "remember": "true"}
+                {"phone": "13543303810",
+                 "password": "928sr410",
+                 "remember": "true",
+                 "token": "${get_token($phone,$password,timestamp)}"
+                 }
             )
             .validate()
             .assert_equal("status_code", 200)
@@ -454,6 +476,8 @@ class TestCaseDemo(HttpRunner):
                 }
             )
             .with_json({"folderId": "0", "type": 0})
+            .extract()
+            .with_jmespath("body.data.id","docID")
             .validate()
             .assert_equal("status_code", 200)
             .assert_equal("body.code", 0)
@@ -575,6 +599,7 @@ class TestCaseDemo(HttpRunner):
         ),
         Step(
             RunRequest("/v3/api/colla/register")
+            .with_variables(**{"remeber":True})
             .get("https://api2.mubu.com/v3/api/colla/register")
             .with_headers(
                 **{
@@ -597,11 +622,12 @@ class TestCaseDemo(HttpRunner):
             .validate()
             .assert_equal("status_code", 200)
             .assert_equal("body.code", 0)
+
         ),
         Step(
             RunRequest("/v3/api/colla/members")
             .options("https://api2.mubu.com/v3/api/colla/members")
-            .with_params(**{"memberId": "2796257931738165", "documentId": "jGADEOIbyW"})
+            .with_params(**{"memberId": "${memberId}", "documentId": "jGADEOIbyW"})
             .with_headers(
                 **{
                     "accept": "*/*",
@@ -623,7 +649,7 @@ class TestCaseDemo(HttpRunner):
         Step(
             RunRequest("/v3/api/colla/members")
             .get("https://api2.mubu.com/v3/api/colla/members")
-            .with_params(**{"memberId": "2796257931738165", "documentId": "jGADEOIbyW"})
+            .with_params(**{"memberId": "${memberId}", "documentId": "jGADEOIbyW"})
             .with_headers(
                 **{
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
@@ -632,7 +658,7 @@ class TestCaseDemo(HttpRunner):
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "members:2796257931738165:1613450272086",
+                    "request-id": "members:${memberId}:1613450272086",
                     "x-request-id": "b7de449e-4170-4c0a-bded-4915a164e77a",
                     "origin": "https://mubu.com",
                     "sec-fetch-site": "same-site",
@@ -646,6 +672,8 @@ class TestCaseDemo(HttpRunner):
             .validate()
             .assert_equal("status_code", 200)
             .assert_equal("body.code", 0)
+            .assert_equal("body.data.next","/next")
+            .assert_length_greater_than("$folderList",5)
         ),
         Step(
             RunRequest("/v3/api/colla/message")
@@ -655,13 +683,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "459",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:3",
+                    "request-id": "MESSAGE:11023082:${memberId}:3",
                     "x-request-id": "4a6f7e74-bc9b-4140-971c-ac5965493b73",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -678,7 +706,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 3,
-                    "requestId": "MESSAGE:11023082:2796257931738165:3",
+                    "requestId": "MESSAGE:11023082:${memberId}:3",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -716,13 +744,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "361",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:5",
+                    "request-id": "MESSAGE:11023082:${memberId}:5",
                     "x-request-id": "905cf160-6d09-4a23-b0c4-8f354e3a45c4",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -739,7 +767,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 5,
-                    "requestId": "MESSAGE:11023082:2796257931738165:5",
+                    "requestId": "MESSAGE:11023082:${memberId}:5",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -803,13 +831,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "657",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:6",
+                    "request-id": "MESSAGE:11023082:${memberId}:6",
                     "x-request-id": "bb72eff0-9b97-4ac9-979d-a44e543843b0",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -826,7 +854,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 6,
-                    "requestId": "MESSAGE:11023082:2796257931738165:6",
+                    "requestId": "MESSAGE:11023082:${memberId}:6",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -891,13 +919,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "459",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:8",
+                    "request-id": "MESSAGE:11023082:${memberId}:8",
                     "x-request-id": "000d063b-e85d-4aa7-a3ed-5b209c9fd123",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -914,7 +942,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 8,
-                    "requestId": "MESSAGE:11023082:2796257931738165:8",
+                    "requestId": "MESSAGE:11023082:${memberId}:8",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -961,13 +989,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "505",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:10",
+                    "request-id": "MESSAGE:11023082:${memberId}:10",
                     "x-request-id": "f49e5548-f5da-4e9a-ad5d-9a2745690593",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -984,7 +1012,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 10,
-                    "requestId": "MESSAGE:11023082:2796257931738165:10",
+                    "requestId": "MESSAGE:11023082:${memberId}:10",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -1033,13 +1061,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "521",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:12",
+                    "request-id": "MESSAGE:11023082:${memberId}:12",
                     "x-request-id": "9a72729b-77c6-4c35-9bee-25597cb166b9",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -1056,7 +1084,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 12,
-                    "requestId": "MESSAGE:11023082:2796257931738165:12",
+                    "requestId": "MESSAGE:11023082:${memberId}:12",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
@@ -1105,13 +1133,13 @@ class TestCaseDemo(HttpRunner):
                     "content-length": "461",
                     "sec-ch-ua": '"Google Chrome";v="87", " Not;A Brand";v="99", "Chromium";v="87"',
                     "sec-ch-ua-mobile": "?0",
-                    "member-id": "2796257931738165",
+                    "member-id": "${memberId}",
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
                     "data-unique-id": "d99ac5d6-6e0b-475a-adec-73238119db21",
                     "content-type": "application/json;charset=UTF-8",
                     "accept": "application/json, text/plain, */*",
                     "jwt-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJhcHAiOiJtdWJ1Iiwic3ViIjoiMTEwMjMwODIiLCJleHAiOjE2MTYwNDIyNjIsImlhdCI6MTYxMzQ1MDI2Mn0.ZFueluxBUgSkL9uzXJMgHWS-Ixt2m7SoY6HONZ-AAl0DiBAqFZRF-cSwF0VS3HEfdZkfFxdv7jHEGgusU4uNaA",
-                    "request-id": "MESSAGE:11023082:2796257931738165:13",
+                    "request-id": "MESSAGE:11023082:${memberId}:13",
                     "x-request-id": "bf8fd16f-fb78-4fba-a16d-7cd526abb5af",
                     "version": "3.0.0",
                     "origin": "https://mubu.com",
@@ -1128,7 +1156,7 @@ class TestCaseDemo(HttpRunner):
                     "engineType": "MUBU",
                     "messageType": "BROADCAST",
                     "reqId": 13,
-                    "requestId": "MESSAGE:11023082:2796257931738165:13",
+                    "requestId": "MESSAGE:11023082:${memberId}:13",
                     "token": "jGADEOIbyW",
                     "data": {
                         "message": {
